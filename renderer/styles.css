@@ -306,9 +306,24 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 #strip-text { flex: none; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .track { flex: 1; height: 4px; border-radius: 99px; background: var(--sin); overflow: hidden; }
 .track i { display: block; height: 100%; width: 0; background: var(--ac); border-radius: 99px; transition: width 0.4s ease; }
-#strip-eng { flex: none; color: var(--tm); margin-left: auto; }
 #strip-cancel { margin-left: auto; }
-#strip-eng + #strip-cancel { margin-left: 0; }
+#strip-update {
+  flex: none; display: flex; align-items: center; gap: 6px;
+  height: 24px; padding: 0 10px; border-radius: 6px;
+  border: 1px solid transparent; background: none;
+  color: var(--tm); font: inherit; font-size: 12px;
+  cursor: pointer;
+}
+#strip-update svg { width: 13px; height: 13px; flex: none; }
+#strip-update:hover { background: var(--s2); color: var(--ts); }
+#strip-update[data-state='available'] {
+  background: var(--acw); border-color: var(--bst);
+  color: var(--ach); font-weight: 600;
+}
+#strip-update[data-state='available']:hover { color: var(--ac); }
+#strip-update[data-state='checking'],
+#strip-update[data-state='installing'] { opacity: 0.6; pointer-events: none; }
+#strip-update[data-state='failed'] { color: var(--err); }
 
 /* ---------- tooltips ---------- */
 [data-tip] { position: relative; }

@@ -9,11 +9,13 @@ contextBridge.exposeInMainWorld('api', {
   retry: (id) => ipcRenderer.invoke('download:retry', id),
   openFolder: (id) => ipcRenderer.invoke('download:openFolder', id),
   updateYtdlp: () => ipcRenderer.invoke('update:ytdlp'),
+  checkYtdlpUpdate: () => ipcRenderer.invoke('update:check'),
   ytdlpVersion: () => ipcRenderer.invoke('ytdlp:version'),
   minimize: () => ipcRenderer.send('win:minimize'),
   maximize: () => ipcRenderer.send('win:maximize'),
   close: () => ipcRenderer.send('win:close'),
   onItems: (cb) => ipcRenderer.on('dl:items', (_e, items) => cb(items)),
   onLog: (cb) => ipcRenderer.on('dl:log', (_e, line) => cb(line)),
+  onYtdlpUpdate: (cb) => ipcRenderer.on('ytdlp:update', (_e, info) => cb(info)),
   onMaximized: (cb) => ipcRenderer.on('win:maximized', (_e, flag) => cb(flag)),
 });

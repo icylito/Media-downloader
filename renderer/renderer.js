@@ -164,13 +164,6 @@ $('pop-embed').addEventListener('click', async () => {
   settings = await window.api.setSettings({ embedThumb: !settings.embedThumb });
   syncPopover();
 });
-$('pop-update').addEventListener('click', async () => {
-  const meta = $('pop-update-meta');
-  meta.textContent = 'checking…';
-  const res = await window.api.updateYtdlp();
-  meta.textContent = res.message.replace(/^.*?:\s*/, '').slice(0, 28) || (res.ok ? 'done' : 'failed');
-  setTimeout(() => (meta.textContent = 'check'), 6000);
-});
 $('pop-log').addEventListener('click', () => {
   setLogOpen(true);
   $('popover').hidden = true;
@@ -184,9 +177,58 @@ function setLogOpen(open) {
 }
 $('strip-log').addEventListener('click', () => setLogOpen(!logOpen));
 
-/* ---------- update button (toolbar) ---------- */
-$('btn-update').addEventListener('click', () => {
-  window.api.updateYtdlp();
+/* ---------- yt-dlp update (bottom-left) ---------- */
+let updateInfo = null;
+let updateBusy = null;
+
+function renderUpdate() {
+  const btn = $('strip-update');
+  const label = $('strip-update-text');
+  if (updateBusy) {
+    btn.dataset.state = updateBusy;
+    label.textContent = updateBusy === 'installing' ? 'Updating yt-dlp…' : 'Checking yt-dlp…';
+    return;
+  }
+  if (updateInfo?.available) {
+    btn.dataset.state = 'available';
+    label.textContent = `Update yt-dlp → ${updateInfo.latest}`;
+    btn.dataset.tip = `yt-dlp ${updateInfo.current} installed · ${updateInfo.latest} available`;
+  } else {
+    btn.dataset.state = 'idle';
+    label.textContent = `yt-dlp ${updateInfo?.current || '…'}`;
+    btn.dataset.tip = 'Check for yt-dlp updates';
+  }
+}
+
+window.api.onYtdlpUpdate((info) => {
+  updateInfo = info;
+  renderUpdate();
+});
+
+$('strip-update').addEventListener('click', async () => {
+  if (updateBusy) return;
+  if (updateInfo?.available) {
+    updateBusy = 'installing';
+    renderUpdate();
+    const res = await window.api.updateYtdlp();
+    updateBusy = res.ok ? null : 'failed';
+    if (!res.ok) {
+      renderUpdate();
+      $('strip-update').dataset.tip = res.message;
+      setTimeout(() => {
+        updateBusy = null;
+        renderUpdate();
+      }, 5000);
+      return;
+    }
+    renderUpdate();
+  } else {
+    updateBusy = 'checking';
+    renderUpdate();
+    updateInfo = await window.api.checkYtdlpUpdate();
+    updateBusy = null;
+    renderUpdate();
+  }
 });
 
 /* ---------- items rendering ---------- */
@@ -327,7 +369,7 @@ window.api.onLog((line) => {
 (async () => {
   settings = await window.api.getSettings();
   $('outdir-label').textContent = shorten(settings.outDir);
-  window.api.ytdlpVersion().then((v) => ($('strip-eng').textContent = v ? `yt-dlp ${v}` : ''));
+  renderUpdate();
   document.querySelector(`.chip[data-mode="${settings.format}"]`)?.click();
   if (settings.format !== 'mp4') {
     // .click() already persisted; just make sure UI matches

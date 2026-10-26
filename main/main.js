@@ -53,6 +53,42 @@ if (!gotLock) {
   });
 }
 
+const YTDLPCHECK = 'https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest';
+
+function ytdlpVersion() {
+  return new Promise((resolve) => {
+    const proc = spawn(bins.ytDlp, ['--version'], { windowsHide: true });
+    let out = '';
+    proc.stdout.on('data', (d) => (out += String(d)));
+    proc.on('error', () => resolve(''));
+    proc.on('close', () => resolve(out.trim()));
+  });
+}
+
+function isNewer(a, b) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d > 0;
+  }
+  return false;
+}
+
+async function checkYtdlpUpdate() {
+  const current = await ytdlpVersion();
+  let latest = null;
+  try {
+    const res = await fetch(YTDLPCHECK, { headers: { 'User-Agent': 'Media-downloader' } });
+    if (res.ok) latest = ((await res.json()).tag_name || '').replace(/^v/, '') || null;
+  } catch {
+    // offline — the button just stays quiet
+  }
+  const update = { current, latest, available: !!(current && latest && isNewer(latest, current)) };
+  send('ytdlp:update', update);
+  return update;
+}
+
 app.whenReady().then(() => {
   bins = getBinaries();
   settings = new Settings(app.getPath('userData'));
@@ -103,36 +139,26 @@ app.whenReady().then(() => {
     if (item && item.file) shell.showItemInFolder(item.file);
     else shell.openPath(settings.get().outDir);
   });
-  ipcMain.handle('ytdlp:version', async () => {
-    return new Promise((resolve) => {
-      const proc = spawn(bins.ytDlp, ['--version'], { windowsHide: true });
-      let out = '';
-      proc.stdout.on('data', (d) => (out += String(d)));
-      proc.on('close', () => resolve(out.trim()));
-      proc.on('error', () => resolve(''));
-    });
-  });
+  ipcMain.handle('ytdlp:version', () => ytdlpVersion());
+  ipcMain.handle('update:check', () => checkYtdlpUpdate());
   ipcMain.handle('update:ytdlp', async () => {
-    return new Promise((resolve) => {
+    const fail = await new Promise((resolve) => {
       const proc = spawn(bins.ytDlp, ['-U'], { windowsHide: true });
       let out = '';
-      proc.stdout.on('data', (d) => {
-        out += String(d);
-      });
-      proc.stderr.on('data', (d) => {
-        out += String(d);
-      });
-      proc.on('close', (code) => {
-        const lines = out.split(/\r?\n/).filter((l) => l.trim());
-        resolve({ ok: code === 0, message: lines.slice(-3).join(' ') || (code === 0 ? 'Up to date.' : 'Update failed.') });
-      });
+      proc.stdout.on('data', (d) => (out += String(d)));
+      proc.stderr.on('data', (d) => (out += String(d)));
+      proc.on('error', (e) => resolve(String(e)));
+      proc.on('close', (code) => resolve(code === 0 ? '' : out.trim() || 'Update failed.'));
     });
+    await checkYtdlpUpdate();
+    return { ok: !fail, message: fail || 'Up to date.' };
   });
   ipcMain.on('win:minimize', () => win.minimize());
   ipcMain.on('win:maximize', () => (win.isMaximized() ? win.unmaximize() : win.maximize()));
   ipcMain.on('win:close', () => win.close());
 
   createWindow();
+  win.webContents.on('did-finish-load', () => checkYtdlpUpdate());
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
