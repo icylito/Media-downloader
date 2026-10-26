@@ -2,7 +2,7 @@
   "name": "media-downloader",
   "version": "1.0.0",
   "description": "YouTube video & audio downloader (MP4 up to 4K, MP3/FLAC/Opus)",
-  "author": "yfais",
+  "author": "Icy",
   "license": "MIT",
   "main": "main/main.js",
   "scripts": {
@@ -10,7 +10,7 @@
     "dist": "electron-builder"
   },
   "build": {
-    "appId": "com.yfais.mediadownloader",
+    "appId": "com.icy.mediadownloader",
     "productName": "Media Downloader",
     "directories": {
       "output": "dist",
