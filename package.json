@@ -1,0 +1,52 @@
+{
+  "name": "media-grabber",
+  "version": "1.0.0",
+  "description": "YouTube video & audio downloader (MP4 up to 4K, MP3/FLAC/Opus)",
+  "author": "yfais",
+  "license": "MIT",
+  "main": "main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.yfais.mediagrabber",
+    "productName": "Media Grabber",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main/**/*",
+      "renderer/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/",
+        "to": "binaries/",
+        "filter": [
+          "**/*.exe"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "MediaGrabber-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "MediaGrabber-Portable-${version}.${ext}"
+    }
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0"
+  }
+}
