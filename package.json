@@ -1,5 +1,5 @@
 {
-  "name": "media-grabber",
+  "name": "media-downloader",
   "version": "1.0.0",
   "description": "YouTube video & audio downloader (MP4 up to 4K, MP3/FLAC/Opus)",
   "author": "yfais",
@@ -10,8 +10,8 @@
     "dist": "electron-builder"
   },
   "build": {
-    "appId": "com.yfais.mediagrabber",
-    "productName": "Media Grabber",
+    "appId": "com.yfais.mediadownloader",
+    "productName": "Media Downloader",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -39,10 +39,10 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "artifactName": "MediaGrabber-Setup-${version}.${ext}"
+      "artifactName": "MediaDownloader-Setup-${version}.${ext}"
     },
     "portable": {
-      "artifactName": "MediaGrabber-Portable-${version}.${ext}"
+      "artifactName": "MediaDownloader-Portable-${version}.${ext}"
     }
   },
   "devDependencies": {
