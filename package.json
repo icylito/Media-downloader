@@ -11,7 +11,7 @@
   },
   "build": {
     "appId": "com.icy.mediadownloader",
-    "productName": "Media Downloader",
+    "productName": "Media-downloader",
     "directories": {
       "output": "dist",
       "buildResources": "build"
