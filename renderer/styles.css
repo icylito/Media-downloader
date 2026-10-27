@@ -87,15 +87,21 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .ibtn[aria-pressed="true"] { background: var(--acw); color: var(--ac); }
 .ibtn.lg { width: 36px; height: 36px; }
 .grab {
-  display: inline-flex; align-items: center; gap: 8px;
-  height: 36px; padding: 0 18px;
-  background: var(--ac); color: var(--onac);
+  display: inline-flex; align-items: center; gap: 9px;
+  height: 38px; padding: 0 20px;
+  background: linear-gradient(180deg, var(--ach), var(--ac));
+  color: var(--onac);
   border-radius: var(--r-ctl);
   font-weight: 600;
+  box-shadow: 0 2px 14px rgba(62, 142, 255, 0.35);
 }
-.grab:hover { background: var(--ach); }
-.grab:disabled { opacity: 0.5; }
-.grab svg { width: 16px; height: 16px; stroke-width: 2; }
+.grab:hover {
+  background: linear-gradient(180deg, #6FADFF, var(--ach));
+  box-shadow: 0 3px 18px rgba(92, 161, 255, 0.45);
+}
+.grab:active { box-shadow: 0 1px 8px rgba(62, 142, 255, 0.3); }
+.grab:disabled { opacity: 0.5; box-shadow: none; }
+.grab svg { width: 20px; height: 20px; stroke-width: 2.4; }
 
 /* ---------- format chips row ---------- */
 .chips { flex: none; display: flex; align-items: center; gap: 8px; padding: 4px 16px 12px; }
