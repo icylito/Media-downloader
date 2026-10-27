@@ -44,7 +44,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   color: #fff;
   display: grid; place-items: center;
 }
-.logo svg { width: 14px; height: 14px; stroke-width: 2; }
+.logo svg { width: 18px; height: 18px; stroke-width: 3.4; }
 .appname { font-size: 13px; font-weight: 600; }
 .winbtns { margin-left: auto; display: flex; gap: 2px; -webkit-app-region: no-drag; }
 .winbtn {
