@@ -12,6 +12,10 @@
   "build": {
     "appId": "com.icy.mediadownloader",
     "productName": "Media-downloader",
+    "publish": {
+      "provider": "github",
+      "releaseType": "release"
+    },
     "directories": {
       "output": "dist",
       "buildResources": "build"
