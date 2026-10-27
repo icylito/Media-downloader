@@ -14,8 +14,12 @@ const QUALITY_OPTIONS = {
     { v: 144, label: '144p' },
   ],
   mp3: [
-    { v: 320, label: '320 kbps' },
     { v: 0, label: 'Best available' },
+    { v: 320, label: '320 kbps' },
+    { v: 256, label: '256 kbps' },
+    { v: 192, label: '192 kbps' },
+    { v: 128, label: '128 kbps' },
+    { v: 96, label: '96 kbps' },
   ],
   flac: [{ v: 0, label: 'Lossless' }],
   opus: [{ v: 0, label: 'Best (Opus copy)' }],
@@ -56,20 +60,42 @@ function fillQuality(mode) {
   });
 }
 
-document.querySelectorAll('.chip').forEach((chip) => {
+// remember each mode's quality so switching MP4 -> MP3 -> MP4 doesn't reset it
+const lastQuality = {};
+
+function qualityValue(mode) {
+  if (lastQuality[mode]) return lastQuality[mode];
+  return mode === 'mp4' ? '0' : String(QUALITY_OPTIONS[mode][0].v);
+}
+
+document.querySelectorAll('.chip[data-mode]').forEach((chip) => {
   chip.addEventListener('click', async () => {
-    document.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c === chip ? 'true' : 'false'));
+    const prev = $('quality').value;
+    if (prev) lastQuality[currentMode()] = prev;
+    document.querySelectorAll('.chip[data-mode]').forEach((c) => c.setAttribute('aria-pressed', c === chip ? 'true' : 'false'));
     const mode = chip.dataset.mode;
     fillQuality(mode);
-    $('quality').value = mode === 'mp4' ? '0' : QUALITY_OPTIONS[mode][0].v;
-    settings = await window.api.setSettings({ format: mode, height: mode === 'mp4' ? 0 : 0 });
+    $('quality').value = qualityValue(mode);
+    $('btn-audio').hidden = mode !== 'mp4';
+    const height = mode === 'mp4' ? parseInt($('quality').value, 10) || 0 : 0;
+    const bitrate = mode === 'mp3' ? parseInt($('quality').value, 10) || 0 : 0;
+    settings = await window.api.setSettings({ format: mode, height, bitrate });
   });
+});
+
+$('btn-audio').addEventListener('click', async () => {
+  const on = $('btn-audio').getAttribute('aria-pressed') === 'true';
+  $('btn-audio').setAttribute('aria-pressed', on ? 'false' : 'true');
+  settings = await window.api.setSettings({ withAudio: !on });
 });
 
 $('quality').addEventListener('change', async () => {
   const mode = currentMode();
-  const height = mode === 'mp4' ? parseInt($('quality').value, 10) : 0;
-  settings = await window.api.setSettings({ height });
+  const patch =
+    mode === 'mp4'
+      ? { height: parseInt($('quality').value, 10) || 0 }
+      : { bitrate: parseInt($('quality').value, 10) || 0 };
+  settings = await window.api.setSettings(patch);
 });
 
 /* ---------- grab ---------- */
@@ -79,6 +105,8 @@ function readOpts() {
     url: $('url').value.trim(),
     mode,
     height: mode === 'mp4' ? parseInt($('quality').value, 10) || 0 : 0,
+    bitrate: mode === 'mp3' ? parseInt($('quality').value, 10) || 0 : 0,
+    withAudio: mode === 'mp4' ? $('btn-audio').getAttribute('aria-pressed') === 'true' : true,
     playlist: $('btn-playlist').getAttribute('aria-pressed') === 'true',
     embedThumb: settings ? settings.embedThumb : true,
   };
@@ -90,7 +118,7 @@ $('btn-grab').addEventListener('click', () => {
     $('url').focus();
     return;
   }
-  window.api.setSettings({ format: opts.mode, height: opts.height, playlist: opts.playlist });
+  window.api.setSettings({ format: opts.mode, height: opts.height, bitrate: opts.bitrate, withAudio: opts.withAudio, playlist: opts.playlist });
   window.api.grab(opts);
   $('url').value = '';
 });
@@ -261,6 +289,7 @@ function render() {
       if (active || it.state === 'done') {
         if (it.height) meta.push(`${it.height >= 2160 ? '4K' : it.height + 'p'}`);
         meta.push(MODE_BADGE[it.mode] || it.mode);
+        if (it.noAudio) meta.push('no audio');
       }
       let statusHtml = '';
       if (it.state === 'active') {
@@ -370,13 +399,16 @@ window.api.onLog((line) => {
   settings = await window.api.getSettings();
   $('outdir-label').textContent = shorten(settings.outDir);
   renderUpdate();
+  if (settings.format === 'mp3' && settings.bitrate) lastQuality.mp3 = String(settings.bitrate);
+  else if (settings.height) lastQuality.mp4 = String(settings.height);
   document.querySelector(`.chip[data-mode="${settings.format}"]`)?.click();
   if (settings.format !== 'mp4') {
     // .click() already persisted; just make sure UI matches
-    document.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c.dataset.mode === settings.format ? 'true' : 'false'));
+    document.querySelectorAll('.chip[data-mode]').forEach((c) => c.setAttribute('aria-pressed', c.dataset.mode === settings.format ? 'true' : 'false'));
     fillQuality(settings.format);
   }
-  if (settings.height) $('quality').value = String(settings.height);
+  if (!$('quality').value) $('quality').value = qualityValue(settings.format);
+  $('btn-audio').setAttribute('aria-pressed', settings.withAudio === false ? 'false' : 'true');
   syncPopover();
   render();
 })();

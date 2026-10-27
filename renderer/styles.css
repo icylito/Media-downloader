@@ -53,7 +53,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   color: var(--ts);
   border-radius: var(--r-ctl);
 }
-.winbtn svg { width: 15px; height: 15px; }
+.winbtn svg { width: 16px; height: 16px; }
 .winbtn:hover { background: var(--s2); color: var(--tp); }
 .winbtn-close:hover { background: #b32d2d; color: #fff; }
 
@@ -207,6 +207,8 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .bar { height: 4px; border-radius: 99px; background: var(--sin); overflow: hidden; margin-top: 2px; }
 .bar i { display: block; height: 100%; background: var(--ac); border-radius: 99px; transition: width 0.4s ease; }
 .row-side { flex: none; display: flex; align-items: center; gap: 10px; }
+.row-side .ibtn { width: 32px; height: 32px; }
+.row-side .ibtn svg { width: 20px; height: 20px; }
 .state { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ts); font-variant-numeric: tabular-nums; }
 .state svg { width: 15px; height: 15px; }
 .state.ok { color: var(--ok); }
@@ -218,7 +220,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   border: 1px solid var(--bs); border-radius: var(--r-ctl);
   font-size: 11px;
 }
-.ghostbtn svg { width: 14px; height: 14px; }
+.ghostbtn svg { width: 16px; height: 16px; }
 .ghostbtn:hover { background: var(--s2); color: var(--tp); }
 .ghostbtn.err { color: var(--err); border-color: var(--err); }
 .ghostbtn.err:hover { background: var(--acw); }

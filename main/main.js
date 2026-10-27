@@ -100,6 +100,7 @@ app.whenReady().then(() => {
     ytDlp: bins.ytDlp,
     ffmpegDir: bins.ffmpegDir,
     outDir: settings.get().outDir,
+    stateDir: app.getPath('userData'),
     onItems: (items) => send('dl:items', items),
     onLog: (line) => send('dl:log', line),
   });
@@ -128,6 +129,8 @@ app.whenReady().then(() => {
       url: String(opts.url || '').trim(),
       mode: opts.mode || s.format,
       height: opts.height ?? s.height,
+      bitrate: opts.bitrate ?? s.bitrate,
+      withAudio: opts.withAudio ?? s.withAudio,
       playlist: opts.playlist ?? s.playlist,
       embedThumb: opts.embedThumb ?? s.embedThumb,
     });

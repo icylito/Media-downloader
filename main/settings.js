@@ -5,6 +5,8 @@ const DEFAULTS = {
   outDir: '',
   format: 'mp4',
   height: 0, // 0 = best available
+  bitrate: 0, // 0 = best available (mp3 kbps otherwise)
+  withAudio: true, // mp4 mode: mux audio into the video
   playlist: false,
   embedThumb: true,
 };

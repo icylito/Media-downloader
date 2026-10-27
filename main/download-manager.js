@@ -1,17 +1,37 @@
 const { spawn, execFile } = require('child_process');
+const fs = require('fs');
 const path = require('path');
 
-const VIDEO_FORMAT = (h) => (h ? `bv*[height<=${h}]+ba/b[height<=${h}]` : 'bv*+ba/b');
+const VIDEO_FORMAT = (h, withAudio) => {
+  const v = h ? `bv*[height<=${h}]` : 'bv*';
+  return withAudio ? (h ? `${v}+ba/b[height<=${h}]` : `${v}+ba/b`) : v;
+};
 
 const AUDIO_ARGS = {
-  mp3: ['-x', '--audio-format', 'mp3', '--audio-quality', '320K'],
-  opus: ['-x', '--audio-format', 'opus'],
-  flac: ['-x', '--audio-format', 'flac'],
+  mp3: (bitrate) => ['-x', '--audio-format', 'mp3', '--audio-quality', bitrate ? `${bitrate}K` : '0'],
+  opus: () => ['-x', '--audio-format', 'opus'],
+  flac: () => ['-x', '--audio-format', 'flac'],
 };
 
 const UNIT_BYTES = { KiB: 1024, MiB: 1048576, GiB: 1073741824 };
 
 const fmtSpeed = (bytesPerSec) => `${(bytesPerSec / UNIT_BYTES.MiB).toFixed(2)} MB/s`;
+
+const fmtSize = (bytes) => {
+  const unit = bytes >= UNIT_BYTES.GiB ? 'GiB' : bytes >= UNIT_BYTES.MiB ? 'MiB' : 'KiB';
+  return `${(bytes / UNIT_BYTES[unit]).toFixed(2)} ${unit}`;
+};
+
+// Windows-style duplicate name: "clip.mp4" taken -> "clip (1).mp4"
+function nextFree(p) {
+  const ext = path.extname(p);
+  const base = path.join(path.dirname(p), path.basename(p, ext));
+  let n = 1;
+  while (fs.existsSync(`${base} (${n})${ext}`)) n += 1;
+  return `${base} (${n})${ext}`;
+}
+
+const stripStreamTag = (p) => p.replace(/\.f\d+(?=\.)/, '');
 
 const fmtEta = (s) => {
   const t = Math.max(0, Math.round(s));
@@ -120,7 +140,7 @@ function applyLine(item, line) {
 }
 
 class DownloadManager {
-  constructor({ ytDlp, ffmpegDir, outDir, onItems, onLog }) {
+  constructor({ ytDlp, ffmpegDir, outDir, stateDir, onItems, onLog }) {
     this.ytDlp = ytDlp;
     this.ffmpegDir = ffmpegDir;
     this.outDir = outDir;
@@ -131,6 +151,29 @@ class DownloadManager {
     this.activeId = null;
     this.proc = null;
     this.nextId = 1;
+    // maps an absolute output path to { vid, mode, height, withAudio } so a
+    // re-grab of the identical media can be skipped instead of re-downloaded
+    this.indexPath = stateDir ? path.join(stateDir, 'download-index.json') : '';
+    this.index = {};
+    if (this.indexPath) {
+      try {
+        this.index = JSON.parse(fs.readFileSync(this.indexPath, 'utf8')) || {};
+      } catch {
+        this.index = {};
+      }
+    }
+  }
+
+  saveIndex() {
+    if (!this.indexPath) return;
+    try {
+      for (const file of Object.keys(this.index)) {
+        if (!fs.existsSync(file)) delete this.index[file];
+      }
+      fs.writeFileSync(this.indexPath, JSON.stringify(this.index, null, 2));
+    } catch {
+      // the index is best-effort; a write failure must not break a download
+    }
   }
 
   snapshot() {
@@ -182,6 +225,8 @@ class DownloadManager {
       url: opts.url,
       mode: opts.mode || 'mp4',
       height: opts.height || 0,
+      bitrate: opts.bitrate || 0,
+      withAudio: opts.withAudio !== false,
       playlist: !!opts.playlist,
       embedThumb: !!opts.embedThumb,
       title: 'Fetching title…',
@@ -196,6 +241,7 @@ class DownloadManager {
       part: 0,
       total: 0,
     };
+    item.noAudio = item.mode === 'mp4' && !item.withAudio;
     this.items.set(id, item);
     this.order.unshift(id);
     if (this.order.length > 60) {
@@ -212,7 +258,15 @@ class DownloadManager {
     if (!old) return;
     this.items.delete(id);
     this.order = this.order.filter((x) => x !== id);
-    this.grab({ url: old.url, mode: old.mode, height: old.height, playlist: old.playlist, embedThumb: old.embedThumb });
+    this.grab({
+      url: old.url,
+      mode: old.mode,
+      height: old.height,
+      bitrate: old.bitrate,
+      withAudio: old.withAudio,
+      playlist: old.playlist,
+      embedThumb: old.embedThumb,
+    });
   }
 
   cancel(id) {
@@ -237,13 +291,118 @@ class DownloadManager {
     if (id) this.start(id);
   }
 
-  start(id) {
+  formatArgs(item) {
+    const f = [];
+    if (item.mode === 'mp4') {
+      f.push('-f', VIDEO_FORMAT(item.height, item.withAudio));
+    } else {
+      f.push('-f', 'ba/b', ...AUDIO_ARGS[item.mode](item.bitrate));
+      if (item.embedThumb) f.push('--embed-thumbnail', '--embed-metadata');
+    }
+    return f;
+  }
+
+  // Resolve what yt-dlp would write (stream name + final name) without downloading,
+  // so an existing file can either skip the grab or shift the new one to "name (1)".
+  resolveTarget(item) {
+    return new Promise((resolve) => {
+      const args = [
+        ...this.formatArgs(item),
+        '-P', this.outDir,
+        '-o', '%(title)s.%(ext)s',
+        '--simulate', '--no-warnings', '--ignore-config', '--windows-filenames',
+        '--print', 'id', '--print', 'filename',
+        '--', item.url,
+      ];
+      const proc = spawn(this.ytDlp, args, { windowsHide: true });
+      let out = '';
+      proc.stdout.on('data', (d) => (out += String(d)));
+      proc.stderr.on('data', () => {});
+      proc.on('error', () => resolve(null));
+      proc.on('close', (code) => {
+        if (code !== 0) return resolve(null);
+        const lines = out.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('['));
+        const [vid, streamName] = lines;
+        if (!vid || !streamName) return resolve(null);
+        // --simulate prints the pre-extraction name; audio modes finish under a different ext
+        const finalName =
+          item.mode === 'mp4' ? streamName : streamName.replace(/\.[a-z0-9]+$/i, `.${item.mode}`);
+        resolve({ vid, streamName, finalName });
+      });
+    });
+  }
+
+  // A file downloaded before with the same identity (video id + format settings)
+  // that is still on disk — that exact grab is a repeat and can be skipped.
+  findByIdentity(item, vid) {
+    for (const [file, rec] of Object.entries(this.index)) {
+      if (
+        rec.vid === vid &&
+        rec.mode === item.mode &&
+        (rec.height || 0) === (item.height || 0) &&
+        (rec.bitrate || 0) === (item.bitrate || 0) &&
+        (rec.withAudio !== false) === item.withAudio &&
+        fs.existsSync(file)
+      ) {
+        return file;
+      }
+    }
+    return '';
+  }
+
+  finishSkipped(item, finalName) {
+    item.file = finalName;
+    item.title =
+      path.basename(finalName).replace(/\.[a-z0-9]+$/i, '').replace(/\.f\d+$/i, '') || item.title;
+    item.progress = 100;
+    item.state = 'done';
+    item.stage = item.playlist ? `Playlist · ${item.total || item.part} items` : 'Already on disk';
+    try {
+      item.size = fmtSize(fs.statSync(finalName).size);
+    } catch {
+      item.size = '';
+    }
+    this.activeId = null;
+    this.emit(true);
+    this.pump();
+  }
+
+  async start(id) {
     const item = this.items.get(id);
     if (!item) return;
     this.activeId = id;
     item.state = 'active';
     item.stage = 'Starting…';
     this.emit(true);
+
+    if (!item.playlist) {
+      item.stage = 'Checking library…';
+      this.emit(true);
+      const target = await this.resolveTarget(item);
+      if (this.activeId !== id || item.state !== 'active') {
+        item.state = 'error';
+        item.stage = 'Canceled';
+        item.error = 'Canceled.';
+        if (this.activeId === id) this.activeId = null;
+        this.emit(true);
+        this.pump();
+        return;
+      }
+      if (target) {
+        item.vid = target.vid;
+        const have = this.findByIdentity(item, target.vid);
+        if (have) {
+          this.finishSkipped(item, have);
+          return;
+        }
+        const streamTaken =
+          target.streamName &&
+          (fs.existsSync(target.streamName) || fs.existsSync(stripStreamTag(target.streamName)));
+        if (fs.existsSync(target.finalName) || streamTaken) item.outName = nextFree(target.finalName);
+      }
+      item.stage = 'Starting…';
+      this.emit(true);
+    }
 
     const args = this.buildArgs(item);
     this.log(`$ yt-dlp ${args.join(' ')}`);
@@ -286,6 +445,23 @@ class DownloadManager {
         item.stage = item.playlist ? `Playlist · ${item.total || item.part} items` : 'Done';
         item.speed = '';
         item.eta = '';
+        if (item.file) {
+          try {
+            item.size = fmtSize(fs.statSync(item.file).size);
+          } catch {
+            // final file missing — keep whatever size text the progress lines left
+          }
+        }
+        if (item.vid && item.file && !item.playlist) {
+          this.index[item.file] = {
+            vid: item.vid,
+            mode: item.mode,
+            height: item.height || 0,
+            bitrate: item.bitrate || 0,
+            withAudio: item.withAudio,
+          };
+          this.saveIndex();
+        }
       } else {
         item.state = 'error';
         item.stage = 'Failed';
@@ -298,18 +474,18 @@ class DownloadManager {
 
   buildArgs(item) {
     const a = [
-      '--newline', '--no-colors', '--ignore-config', '--windows-filenames', '--force-overwrites',
+      '--newline', '--no-colors', '--ignore-config', '--windows-filenames',
       '--ffmpeg-location', this.ffmpegDir,
       '-P', this.outDir,
-      '-o', '%(title)s.%(ext)s',
       item.playlist ? '--yes-playlist' : '--no-playlist',
     ];
-    if (item.mode === 'mp4') {
-      a.push('-f', VIDEO_FORMAT(item.height));
+    if (!item.playlist && item.vid) {
+      // target was resolved up front and is fresh — never clobber anything
     } else {
-      a.push('-f', 'ba/b', ...AUDIO_ARGS[item.mode]);
-      if (item.embedThumb) a.push('--embed-thumbnail', '--embed-metadata');
+      a.push('--force-overwrites');
     }
+    a.push('-o', item.outName ? item.outName.replace(/%/g, '%%') : '%(title)s.%(ext)s');
+    a.push(...this.formatArgs(item));
     a.push('--', item.url);
     return a;
   }
