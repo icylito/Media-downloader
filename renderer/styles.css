@@ -19,12 +19,15 @@ body {
   user-select: none;
 }
 button { font: inherit; color: inherit; background: none; border: none; }
+:focus-visible { outline: 2px solid var(--ac); outline-offset: -2px; }
+#url:focus-visible, #quality:focus-visible { outline-offset: 0; }
 svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
 #app {
   height: 100vh;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 /* ---------- titlebar ---------- */
@@ -46,7 +49,14 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 }
 .logo svg { width: 18px; height: 18px; stroke-width: 3.4; }
 .appname { font-size: 13px; font-weight: 600; }
-.winbtns { margin-left: auto; display: flex; gap: 2px; -webkit-app-region: no-drag; }
+/* floats over the titlebar but sits last in the DOM, so window controls
+   are the final tab stops instead of the first */
+.winbtns {
+  position: absolute; top: 4px; right: 12px;
+  display: flex; gap: 2px;
+  -webkit-app-region: no-drag;
+  z-index: 20;
+}
 .winbtn {
   width: 44px; height: 32px;
   display: grid; place-items: center;

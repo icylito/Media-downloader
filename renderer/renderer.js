@@ -1,4 +1,4 @@
-/* Media-downloader renderer — talks to the main process through window.api */
+/* Media downloader renderer — talks to the main process through window.api */
 const $ = (id) => document.getElementById(id);
 
 const QUALITY_OPTIONS = {
@@ -33,6 +33,21 @@ const MODE_ICONS = {
 };
 const MODE_BADGE = { mp4: 'MP4', mp3: 'MP3', flac: 'FLAC', opus: 'Opus' };
 
+// mirrors main/states.js — presentation for every state the manager can send
+const STATE_VIEW = {
+  queued: { chip: 'Queued', kind: 'pending' },
+  resolving: { chip: 'Fetching info…', kind: 'active' },
+  downloading: { chip: 'Downloading', kind: 'active' },
+  muxing: { chip: 'Merging video and audio', kind: 'active' },
+  extracting: { chip: 'Processing audio…', kind: 'active' },
+  embedding: { chip: 'Adding thumbnail…', kind: 'active' },
+  done: { chip: 'Done', kind: 'ok' },
+  skipped: { chip: 'Already downloaded', kind: 'ok' },
+  canceling: { chip: 'Canceling…', kind: 'active' },
+  canceled: { chip: 'Canceled', kind: 'error' },
+  failed: { chip: 'Failed', kind: 'error' },
+};
+
 let settings = null;
 let items = [];
 let logOpen = false;
@@ -45,7 +60,7 @@ $('btn-close').addEventListener('click', () => window.api.close());
 
 /* ---------- format / quality ---------- */
 function currentMode() {
-  const active = document.querySelector('.chip[aria-pressed="true"]');
+  const active = document.querySelector('.chip[data-mode][aria-pressed="true"]');
   return active ? active.dataset.mode : 'mp4';
 }
 
@@ -74,12 +89,15 @@ document.querySelectorAll('.chip[data-mode]').forEach((chip) => {
     if (prev) lastQuality[currentMode()] = prev;
     document.querySelectorAll('.chip[data-mode]').forEach((c) => c.setAttribute('aria-pressed', c === chip ? 'true' : 'false'));
     const mode = chip.dataset.mode;
+    const q = parseInt(qualityValue(mode), 10) || 0;
     fillQuality(mode);
     $('quality').value = qualityValue(mode);
     $('btn-audio').hidden = mode !== 'mp4';
-    const height = mode === 'mp4' ? parseInt($('quality').value, 10) || 0 : 0;
-    const bitrate = mode === 'mp3' ? parseInt($('quality').value, 10) || 0 : 0;
-    settings = await window.api.setSettings({ format: mode, height, bitrate });
+    // persist the switch without zeroing the other mode's saved quality
+    const patch = { format: mode };
+    if (mode === 'mp4') patch.height = q;
+    if (mode === 'mp3') patch.bitrate = q;
+    settings = await window.api.setSettings(patch);
   });
 });
 
@@ -91,11 +109,9 @@ $('btn-audio').addEventListener('click', async () => {
 
 $('quality').addEventListener('change', async () => {
   const mode = currentMode();
-  const patch =
-    mode === 'mp4'
-      ? { height: parseInt($('quality').value, 10) || 0 }
-      : { bitrate: parseInt($('quality').value, 10) || 0 };
-  settings = await window.api.setSettings(patch);
+  const v = parseInt($('quality').value, 10) || 0;
+  // each mode persists only its own quality field
+  settings = await window.api.setSettings(mode === 'mp4' ? { height: v } : { bitrate: v });
 });
 
 /* ---------- grab ---------- */
@@ -118,7 +134,10 @@ $('btn-grab').addEventListener('click', () => {
     $('url').focus();
     return;
   }
-  window.api.setSettings({ format: opts.mode, height: opts.height, bitrate: opts.bitrate, withAudio: opts.withAudio, playlist: opts.playlist });
+  const patch = { format: opts.mode, playlist: opts.playlist };
+  if (opts.mode === 'mp4') patch.height = opts.height;
+  if (opts.mode === 'mp3') patch.bitrate = opts.bitrate;
+  window.api.setSettings(patch);
   window.api.grab(opts);
   $('url').value = '';
 });
@@ -159,13 +178,28 @@ $('btn-settings').addEventListener('click', () => {
   $('btn-settings').setAttribute('aria-expanded', String(open));
 });
 
+function closePopover() {
+  $('popover').hidden = true;
+  $('btn-settings').classList.remove('on');
+  $('btn-settings').setAttribute('aria-expanded', 'false');
+}
+
 document.addEventListener('click', (e) => {
   const pop = $('popover');
   if (pop.hidden) return;
   if (pop.contains(e.target) || $('btn-settings').contains(e.target)) return;
-  pop.hidden = true;
-  $('btn-settings').classList.remove('on');
-  $('btn-settings').setAttribute('aria-expanded', 'false');
+  closePopover();
+});
+
+// Escape walks out one layer at a time: popover first, then the log drawer
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (!$('popover').hidden) {
+    closePopover();
+    $('btn-settings').focus();
+    return;
+  }
+  if (logOpen) setLogOpen(false);
 });
 
 function syncPopover() {
@@ -194,8 +228,7 @@ $('pop-embed').addEventListener('click', async () => {
 });
 $('pop-log').addEventListener('click', () => {
   setLogOpen(true);
-  $('popover').hidden = true;
-  $('btn-settings').classList.remove('on');
+  closePopover();
 });
 
 /* ---------- log drawer ---------- */
@@ -271,8 +304,11 @@ function esc(s) {
 }
 
 function rowThumb(mode, state) {
-  const cls = state === 'error' ? 'row-thumb err' : state === 'queued' ? 'row-thumb dim' : mode === 'mp4' ? 'row-thumb' : 'row-thumb audio';
-  const icon = state === 'error' ? '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>' : MODE_ICONS[mode] || MODE_ICONS.mp4;
+  const view = STATE_VIEW[state] || STATE_VIEW.failed;
+  const cls = view.kind === 'error' ? 'row-thumb err' : view.kind === 'pending' ? 'row-thumb dim' : mode === 'mp4' ? 'row-thumb' : 'row-thumb audio';
+  const icon = view.kind === 'error'
+    ? '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/>'
+    : MODE_ICONS[mode] || MODE_ICONS.mp4;
   return `<span class="${cls}">${icon}</span>`;
 }
 
@@ -284,48 +320,47 @@ function render() {
 
   list.innerHTML = items
     .map((it) => {
-      const active = it.state === 'active';
+      const view = STATE_VIEW[it.state] || STATE_VIEW.failed;
       const meta = [];
-      if (active || it.state === 'done') {
-        if (it.height) meta.push(`${it.height >= 2160 ? '4K' : it.height + 'p'}`);
+      if (view.kind === 'active' || view.kind === 'ok') {
+        const h = it.actualHeight || it.height;
+        if (h) meta.push(`${h >= 2160 ? '4K' : h + 'p'}`);
         meta.push(MODE_BADGE[it.mode] || it.mode);
         if (it.noAudio) meta.push('no audio');
+        if (it.total) meta.push(view.kind === 'ok' ? `Playlist · ${it.total} items` : `Item ${it.part} of ${it.total}`);
       }
       let statusHtml = '';
-      if (it.state === 'active') {
+      if (view.kind === 'active') {
+        if (it.state !== 'downloading') meta.unshift(view.chip);
         meta.push(
           `${it.progress.toFixed(0)}%${it.speed ? ' · ' + it.speed : ''}${it.eta ? ' · ' + it.eta + ' left' : ''}`,
         );
-      } else if (it.state === 'done') {
-        meta.push(it.size || '');
-      }
-      if (it.stage && it.state !== 'done') meta.unshift(it.stage);
-
-      if (it.state === 'active') {
         statusHtml = `<span class="badge">${MODE_BADGE[it.mode] || ''}</span>
           <button class="ibtn" data-act="cancel" data-id="${it.id}" data-tip="Cancel" aria-label="Cancel download">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
           </button>`;
-      } else if (it.state === 'done') {
-        statusHtml = `<span class="state ok"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>Done</span>
+      } else if (view.kind === 'ok') {
+        if (it.state !== 'skipped' && !it.skipped) meta.push(it.size || '');
+        const chipText = it.state === 'skipped' || it.skipped ? STATE_VIEW.skipped.chip : view.chip;
+        statusHtml = `<span class="state ok"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>${chipText}</span>
           <button class="ibtn" data-act="open" data-id="${it.id}" data-tip="Open folder" aria-label="Open folder">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8V6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/><path d="M3 8h18l-1.5 10a2 2 0 0 1-2 1.7H6.5a2 2 0 0 1-2-1.7z"/></svg>
           </button>`;
-      } else if (it.state === 'error') {
+      } else if (view.kind === 'error') {
         statusHtml = `<button class="ghostbtn err" data-act="retry" data-id="${it.id}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>Retry
           </button>`;
       } else {
-        statusHtml = `<span class="state">${it.state === 'canceling' ? 'Canceling…' : 'Queued'}</span>`;
+        statusHtml = `<span class="state">${view.chip}</span>`;
       }
 
       const bar =
-        active || it.state === 'canceling'
+        it.state === 'downloading' || it.state === 'canceling'
           ? `<div class="bar"><i data-w="${Math.max(2, it.progress)}"></i></div>`
           : '';
       const errMeta =
-        it.state === 'error' ? `<span class="row-meta err">${esc(it.error || 'Download failed.')}</span>` : '';
-      const dim = it.state === 'queued' ? ' dimmed' : '';
+        view.kind === 'error' ? `<span class="row-meta err">${esc(it.error || view.chip)}</span>` : '';
+      const dim = view.kind === 'pending' ? ' dimmed' : '';
 
       return `<div class="row${dim}">
         ${rowThumb(it.mode, it.state)}
@@ -348,7 +383,7 @@ function render() {
 }
 
 function renderStrip() {
-  const active = items.find((x) => x.state === 'active');
+  const active = items.find((x) => STATE_VIEW[x.state]?.kind === 'active');
   const text = $('strip-text');
   const track = $('strip-track');
   const fill = $('strip-fill');
@@ -375,7 +410,7 @@ list.addEventListener('click', (e) => {
 });
 
 $('strip-cancel').addEventListener('click', () => {
-  const active = items.find((x) => x.state === 'active');
+  const active = items.find((x) => STATE_VIEW[x.state]?.kind === 'active');
   if (active) window.api.cancel(active.id);
 });
 
@@ -394,13 +429,21 @@ window.api.onLog((line) => {
   if (atBottom) $('log').scrollTop = $('log').scrollHeight;
 });
 
+window.api.onMaximized((flag) => {
+  $('btn-max').setAttribute('aria-label', flag ? 'Restore' : 'Maximize');
+  $('btn-max').innerHTML = flag
+    ? '<svg viewBox="0 0 24 24"><path d="M9 6.5h9A1.5 1.5 0 0 1 19.5 8v9"/><rect x="4.5" y="9" width="10.5" height="10.5" rx="1.5"/></svg>'
+    : '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>';
+});
+
 /* ---------- boot ---------- */
 (async () => {
   settings = await window.api.getSettings();
   $('outdir-label').textContent = shorten(settings.outDir);
   renderUpdate();
+  // each mode remembers its own quality
+  if (settings.height) lastQuality.mp4 = String(settings.height);
   if (settings.format === 'mp3' && settings.bitrate) lastQuality.mp3 = String(settings.bitrate);
-  else if (settings.height) lastQuality.mp4 = String(settings.height);
   document.querySelector(`.chip[data-mode="${settings.format}"]`)?.click();
   if (settings.format !== 'mp4') {
     // .click() already persisted; just make sure UI matches
