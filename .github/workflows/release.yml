@@ -18,6 +18,14 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx electron-builder --publish always
+      # --publish never: electron-builder's per-target publishers race to create
+      # the GitHub release, which splits assets across duplicate releases.
+      # Build only here; the step below owns the release.
+      - run: npx electron-builder --publish never
+      - name: Upload release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "${GITHUB_REF_NAME#v}" --generate-notes || true
+          gh release upload "$GITHUB_REF_NAME" dist/*.exe dist/*.blockmap dist/latest*.yml --clobber
