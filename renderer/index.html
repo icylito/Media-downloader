@@ -51,11 +51,11 @@
       <button id="btn-audio" class="chip" data-tip="Include audio in the video file" aria-pressed="true">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h3l2-6 3 12 2.5-8 1.5 4h6"/></svg>Audio
       </button>
-      <span class="save">
+      <button id="btn-outdir" class="save tip-end" data-tip="Change download folder" aria-label="Change download folder">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8V6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/><path d="M3 8h18l-1.5 10a2 2 0 0 1-2 1.7H6.5a2 2 0 0 1-2-1.7z"/></svg>
         <span id="outdir-label">…</span>
-      </span>
-      <button id="btn-playlist" class="ibtn" data-tip="Whole playlist" aria-label="Download whole playlist" aria-pressed="false">
+      </button>
+      <button id="btn-playlist" class="ibtn tip-end" data-tip="Whole playlist" aria-label="Download whole playlist" aria-pressed="false">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h12M4 11h12M4 16h7"/><path d="M17 13v7M14 17l3 3 3-3"/></svg>
       </button>
     </div>
@@ -80,11 +80,6 @@
 
     <div id="popover" class="popover" role="dialog" aria-label="Settings" hidden>
       <div class="pop-label">Downloads</div>
-      <button class="pop-item" id="pop-folder">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8V6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/><path d="M3 8h18l-1.5 10a2 2 0 0 1-2 1.7H6.5a2 2 0 0 1-2-1.7z"/></svg>
-        <span class="pop-path" id="pop-folder-path">…</span>
-        <span class="pop-meta">Change</span>
-      </button>
       <button class="pop-item" id="pop-playlist">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h12M4 11h12M4 16h7"/><path d="M17 13v7M14 17l3 3 3-3"/></svg>
         <span>Whole playlist</span>
@@ -113,7 +108,7 @@
       </button>
       <span id="strip-text">Ready</span>
       <span id="strip-track" class="track" hidden><i id="strip-fill"></i></span>
-      <button id="strip-cancel" class="ibtn" data-tip="Cancel download" aria-label="Cancel active download" hidden>
+      <button id="strip-cancel" class="ibtn tip-end" data-tip="Cancel download" aria-label="Cancel active download" hidden>
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
       </button>
     </footer>

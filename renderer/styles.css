@@ -139,7 +139,9 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   max-width: 320px; height: 28px; padding: 0 10px;
   color: var(--ts); font-size: 11px;
   border-radius: var(--r-ctl);
+  cursor: pointer;
 }
+.save:hover { background: var(--s2); color: var(--tp); }
 .save svg { width: 15px; height: 15px; flex: none; }
 .save span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -285,9 +287,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 }
 .pop-item svg { width: 16px; height: 16px; color: var(--ts); flex: none; }
 .pop-item:hover { background: var(--sin); }
-.pop-item .pop-path { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ts); }
 .pop-item span { flex: 1; }
-.pop-item .pop-meta { flex: none; font-size: 11px; color: var(--tm); }
 .popover hr { border: none; border-top: 1px solid var(--bs); margin: 6px 4px; }
 .sw {
   width: 28px; height: 16px; flex: none;
@@ -361,6 +361,13 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   z-index: 50;
   pointer-events: none;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+/* buttons at the window edge anchor the tip to their right side, so a centered
+   tip can't run past the window bounds and get clipped */
+[data-tip].tip-end:hover::after {
+  left: auto;
+  right: 0;
+  transform: none;
 }
 
 ::-webkit-scrollbar { width: 10px; }

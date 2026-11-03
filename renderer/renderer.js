@@ -204,18 +204,17 @@ document.addEventListener('keydown', (e) => {
 
 function syncPopover() {
   if (!settings) return;
-  $('pop-folder-path').textContent = settings.outDir;
   $('sw-playlist').classList.toggle('on', !!settings.playlist);
   $('sw-embed').classList.toggle('on', !!settings.embedThumb);
   $('btn-playlist').setAttribute('aria-pressed', settings.playlist ? 'true' : 'false');
 }
 
-$('pop-folder').addEventListener('click', async () => {
+// the whole save pill opens the folder picker; main persists the choice
+$('btn-outdir').addEventListener('click', async () => {
   const dir = await window.api.pickFolder();
   if (dir) {
     settings = { ...settings, outDir: dir };
     $('outdir-label').textContent = shorten(dir);
-    syncPopover();
   }
 });
 $('pop-playlist').addEventListener('click', async () => {
